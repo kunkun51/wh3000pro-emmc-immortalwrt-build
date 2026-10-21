@@ -112,3 +112,30 @@ jobs:
         with:
           name: WH3000Pro-EMMC-QModem
           path: openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}
+
+      - name: Generate release tag
+        id: tag
+        run: |
+          echo "release_tag=$(date +'%Y.%m.%d-%H%M')" >> $GITHUB_OUTPUT
+          echo "release_date=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          name: ImmortalWrt WH3000Pro EMMC ${{ steps.tag.outputs.release_date }}
+          body: |
+            ## 📦 ImmortalWrt WH3000Pro EMMC 固件
+            - **源码分支**: ${{ env.REPO_BRANCH }}
+            - **目标设备**: ${{ env.PROFILE }}
+            - **编译时间**: ${{ steps.tag.outputs.release_date }}
+            
+            > ⚠️ 本固件由 GitHub Actions 自动编译生成
+          files: |
+            openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*-emmc-sysupgrade.bin
+            openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*.manifest
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
