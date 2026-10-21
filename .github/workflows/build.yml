@@ -1,8 +1,8 @@
 name: Build ImmortalWrt WH3000Pro EMMC
 on:
   workflow_dispatch:
-#  push:
-#    branches: [ main ]
+  push:
+    branches: [ main ]
 
 env:
   REPO_URL: https://github.com/immortalwrt/immortalwrt
@@ -50,16 +50,27 @@ jobs:
         run: |
           cd openwrt
           cat ../.config > .config
-          echo "make defconfig"
-          make defconfig || { echo "defconfig failed"; exit 1; }
-          echo "diff initial config and new config:"
-          diff ../.config .config
-          echo "diff initial config and new config (from old config only):"
-          diff ../.config .config | grep -e "^<" | grep -v "^< #"
-          echo "diff initial config and new config (from new config only):"
-          diff ../.config .config | grep -e "^>" | grep -v "^> #"
-          echo "check device exist"
-          grep -Fxq "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_huasifei_wh3000-pro-emmc=y" .config || exit 1
+
+          # 先尝试修复已知的循环依赖（临时规避）
+          sed -i 's/CONFIG_PACKAGE_luci-app-weechat=y/# CONFIG_PACKAGE_luci-app-weechat is not set/' .config
+
+          echo "Running make defconfig..."
+          if ! make defconfig; then
+            echo "::error::defconfig failed due to dependency issues"
+            # 输出详细错误以便调试
+            grep -i "recursive dependency\|does not exist" tmp/.config-package.in || true
+            exit 1
+          fi
+
+          # 检查目标设备是否被正确启用
+          if ! grep -Fxq "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_huasifei_wh3000-pro-emmc=y" .config; then
+            echo "::error::Target device huasifei_wh3000-pro-emmc not found in final config!"
+            echo "Available huasifei devices:"
+            grep "huasifei" .config || true
+            exit 1
+          fi
+
+          echo "✅ Config validated successfully"
 
       - name: diy-part2
         run: |
