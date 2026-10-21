@@ -1,0 +1,8 @@
+#!/bin/bash
+echo "[DIY-P1] add feeds"
+# QModem
+sed -i '$a src-git qmodem https://github.com/FUjr/QModem' feeds.conf.default
+# Argon主题 & 设置面板
+sed -i '$a src-git argon https://github.com/jerrykuku/luci-theme-argon' feeds.conf.default
+sed -i '$a src-git argonconfig https://github.com/jerrykuku/luci-app-argon-config' feeds.conf.default
+echo "[DIY-P1] done"

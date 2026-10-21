@@ -1,0 +1,74 @@
+name: Build ImmortalWrt WH3000Pro EMMC MINI (MT5700+QModem+Argon)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+env:
+  REPO_URL: https://github.com/immortalwrt/immortalwrt
+  REPO_BRANCH: 25.12
+  TARGET_BOARD: mediatek
+  TARGET_SUBTARGET: filogic
+  PROFILE: huasifei_wh3000-pro-emmc
+  CONFIG_FILE: .config
+  DIY1: diy-part1.sh
+  DIY2: diy-part2.sh
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare Build Env
+        uses: P3TERX/setup-openwrt-build-env@main
+
+      - name: Clone ImmortalWrt
+        run: |
+          git clone --depth 1 -b ${{ env.REPO_BRANCH }} ${{ env.REPO_URL }} openwrt
+          cd openwrt
+
+      - name: diy-part1
+        run: |
+          cd openwrt
+          chmod +x ../${{ env.DIY1 }}
+          ../${{ env.DIY1 }}
+
+      - name: Feeds update & install
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Load config
+        run: |
+          cd openwrt
+          cp ../${{ env.CONFIG_FILE }} .config
+          make defconfig
+
+      - name: diy-part2
+        run: |
+          cd openwrt
+          chmod +x ../${{ env.DIY2 }}
+          ../${{ env.DIY2 }}
+
+      - name: Cache
+        uses: P3TERX/cache-openwrt@main
+        with:
+          path: openwrt
+          key: ${{ env.TARGET_BOARD }}-${{ env.TARGET_SUBTARGET }}-${{ github.sha }}
+          restore-keys: |
+            ${{ env.TARGET_BOARD }}-${{ env.TARGET_SUBTARGET }}-
+
+      - name: Compile
+        run: |
+          cd openwrt
+          make -j$(nproc) V=s
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: WH3000Pro-EMMC-MINI-MT5700-QModem
+          path: openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}
