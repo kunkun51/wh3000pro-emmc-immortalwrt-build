@@ -1,5 +1,4 @@
-name: Build ImmortalWrt WH3000Pro EMMC MINI (MT5700+QModem+Argon)
-
+name: Build ImmortalWrt WH3000Pro EMMC MINI MT5700 QModem Argon
 on:
   workflow_dispatch:
   push:
@@ -22,15 +21,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare Build Env
-        uses: P3TERX/setup-openwrt-build-env@main
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+          bzip2 ccache cmake cpio curl device-tree-compiler flex gawk gcc-multilib g++-multilib gettext \
+          git gzip libncurses-dev libssl-dev libxml2 libxslt-dev make nano pkgconf python3 python3-pip \
+          python3-setuptools rsync sed swig tar unzip wget zlib1g-dev
 
-      - name: Clone ImmortalWrt
+      - name: Clone ImmortalWrt source
         run: |
           git clone --depth 1 -b ${{ env.REPO_BRANCH }} ${{ env.REPO_URL }} openwrt
           cd openwrt
 
-      - name: diy-part1
+      - name: diy-part1 feeds
         run: |
           cd openwrt
           chmod +x ../${{ env.DIY1 }}
@@ -42,7 +46,7 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Load config
+      - name: Load .config
         run: |
           cd openwrt
           cp ../${{ env.CONFIG_FILE }} .config
@@ -54,20 +58,24 @@ jobs:
           chmod +x ../${{ env.DIY2 }}
           ../${{ env.DIY2 }}
 
-      - name: Cache
-        uses: P3TERX/cache-openwrt@main
+      - name: Cache build dir
+        uses: actions/cache@v4
         with:
-          path: openwrt
+          path: |
+            openwrt/staging_dir
+            openwrt/build_dir
+            openwrt/toolchain
+            openwrt/dl
           key: ${{ env.TARGET_BOARD }}-${{ env.TARGET_SUBTARGET }}-${{ github.sha }}
           restore-keys: |
             ${{ env.TARGET_BOARD }}-${{ env.TARGET_SUBTARGET }}-
 
-      - name: Compile
+      - name: Compile firmware
         run: |
           cd openwrt
           make -j$(nproc) V=s
 
-      - name: Upload firmware
+      - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
           name: WH3000Pro-EMMC-MINI-MT5700-QModem
