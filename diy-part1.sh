@@ -13,5 +13,7 @@ sed -i '$a src-git fancontrol https://github.com/JiaY-shi/fancontrol.git' feeds.
 
 # Aurora 主题
 sed -i '$a src-git aurora https://github.com/eamonxg/luci-theme-aurora.git' feeds.conf.default
+# Aurora Config（新增）
+sed -i '$a src-git auroraconfig https://github.com/eamonxg/luci-app-aurora-config.git' feeds.conf.default
 
 echo "[DIY-P1] done"
