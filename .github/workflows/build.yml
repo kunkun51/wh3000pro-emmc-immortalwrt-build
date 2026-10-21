@@ -51,22 +51,34 @@ jobs:
           cd openwrt
           cat ../.config > .config
 
-          # 先尝试修复已知的循环依赖（临时规避）
-          sed -i 's/CONFIG_PACKAGE_luci-app-weechat=y/# CONFIG_PACKAGE_luci-app-weechat is not set/' .config
+          # [新增] 临时规避已知的循环依赖（可根据实际情况调整）
+          sed -i 's/CONFIG_PACKAGE_luci-app-weechat=y/# CONFIG_PACKAGE_luci-app-weechat is not set/' .config || true
 
-          echo "Running make defconfig..."
+          echo "=== Running make defconfig ==="
           if ! make defconfig; then
             echo "::error::defconfig failed due to dependency issues"
-            # 输出详细错误以便调试
             grep -i "recursive dependency\|does not exist" tmp/.config-package.in || true
             exit 1
           fi
 
-          # 检查目标设备是否被正确启用
+          # [保留] 完整差异对比（留作完整日志备查）
+          echo "=== Diff: initial config vs new config (full) ==="
+          diff ../.config .config || true
+
+          # [保留] 仅显示旧配置中有、新配置中没有的项（丢失的配置 ⚠️）
+          echo "=== Diff: lost configs (from old config only) ==="
+          diff ../.config .config | grep -e "^<" | grep -v "^< #" || true
+
+          # [保留] 仅显示新配置中有、旧配置中没有的项（新增的配置）
+          echo "=== Diff: new configs (from new config only) ==="
+          diff ../.config .config | grep -e "^>" | grep -v "^> #" || true
+
+          # [增强] 目标设备存在性校验 + 可用设备列表反馈
+          echo "=== Checking target device ==="
           if ! grep -Fxq "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_huasifei_wh3000-pro-emmc=y" .config; then
-            echo "::error::Target device huasifei_wh3000-pro-emmc not found in final config!"
-            echo "Available huasifei devices:"
-            grep "huasifei" .config || true
+            echo "::error::Target device huasifei_wh3000-pro-emmc NOT found in final config!"
+            echo "Available huasifei devices in current config:"
+            grep "huasifei" .config || echo "(none found)"
             exit 1
           fi
 
