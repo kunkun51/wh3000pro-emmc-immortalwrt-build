@@ -133,8 +133,7 @@ jobs:
             
             > ⚠️ 本固件由 GitHub Actions 自动编译生成
           files: |
-            openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*-emmc-sysupgrade.bin
-            openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*.manifest
+            openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*
           draft: false
           prerelease: false
         env:
