@@ -46,11 +46,20 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Load .config
+      - name: Apply diffconfig
         run: |
           cd openwrt
-          cp ../${{ env.CONFIG_FILE }} .config
-          make defconfig
+          cat ../.config > .config
+          echo "make defconfig"
+          make defconfig || { echo "defconfig failed"; exit 1; }
+          echo "diff initial config and new config:"
+          diff ../.config .config
+          echo "diff initial config and new config (from old config only):"
+          diff ../.config .config | grep -e "^<" | grep -v "^< #"
+          echo "diff initial config and new config (from new config only):"
+          diff ../.config .config | grep -e "^>" | grep -v "^> #"
+          echo "check device exist"
+          grep -Fxq "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_huasifei_wh3000-pro-emmc=y" .config || exit 1
 
       - name: diy-part2
         run: |
