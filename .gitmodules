@@ -13,3 +13,6 @@
 [submodule "plugin/theme/luci-app-aurora-config"]
 	path = plugin/theme/luci-app-aurora-config
 	url = https://github.com/eamonxg/luci-app-aurora-config.git
+[submodule "plugin/mt5700/luci-app-mt5700"]
+	path = plugin/mt5700/luci-app-mt5700
+	url = https://github.com/LianXia233/luci-app-mt5700.git
