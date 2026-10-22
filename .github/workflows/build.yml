@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
 #  push:
 #   branches: [ main ]
+  #schedule:
+   #- cron: '0 16 * * *'   # UTC 16:00 = 北京时间每天 00:00（半夜12点）
 
 env:
   REPO_URL: https://github.com/immortalwrt/immortalwrt
@@ -48,7 +50,7 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: diy-part2 copy plugin & modify ip
+      - name: diy-part2 copy plugin & modify config
         run: |
           cd openwrt
           chmod +x ../${{ env.DIY2 }}
