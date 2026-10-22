@@ -2,6 +2,8 @@
 echo "[DIY-P2] start"
 # 可选修改后台IP，默认192.168.1.1 --> 192.168.8.1
 #sed -i 's/192.168.1.1/192.168.8.1/g' package/base-files/files/bin/config_generate
+# 设置默认主题为 aurora（覆盖 bootstrap 默认）
+sed -i 's/luci-theme-bootstrap/luci-theme-aurora/g' feeds/luci/collections/luci/Makefile 2>/dev/null || true
 
 echo "update submodules"
 cd $GITHUB_WORKSPACE
