@@ -18,30 +18,10 @@ if [ -d "package/plugin" ]; then
 fi
 cp -r $GITHUB_WORKSPACE/plugin package/
 
-# ===== 设置默认 LED 配置 =====
-mkdir -p package/base-files/files/etc/uci-defaults
-cat > package/base-files/files/etc/uci-defaults/99-custom-led <<'EOF'
-#!/bin/sh
-. /lib/functions.sh
-# 首次启动设置默认 LED，升级时不覆盖用户配置
-[ "$PKG_UPGRADE" = 1 ] && exit 0
-
-# 清空已有 led 段，避免重复添加
-for s in $(uci -q show system 2>/dev/null | grep -oE 'system\.@led\[[0-9]+\]' | sort -u); do
-	uci -q delete "$s"
-done
-
-# blue:status -> 关闭（trigger none）
-cfg=$(uci -q add system led)
-uci -q set system."$cfg".name='1'
-uci -q set system."$cfg".sysfs='blue:status'
-uci -q set system."$cfg".trigger='none'
-uci -q set system."$cfg".default='0'
-
-uci commit system
-exit 0
-EOF
-chmod +x package/base-files/files/etc/uci-defaults/99-custom-led
+# ===== 拷贝自定义文件（files/ 下含 WiFi、LED、root密码、fancontrol 的 uci-defaults，由构建系统覆盖进固件根文件系统）=====
+# 注意：必须放到编译根目录的 files/ 下，OpenWrt 才会原样打包进固件
+rm -rf files
+cp -r "$GITHUB_WORKSPACE/files" .
+chmod +x files/etc/uci-defaults/*
 
 echo "[DIY-P2] done"
-
