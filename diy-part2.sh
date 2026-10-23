@@ -18,51 +18,6 @@ if [ -d "package/plugin" ]; then
 fi
 cp -r $GITHUB_WORKSPACE/plugin package/
 
-# ===== 设置默认 WiFi（自动探测硬件后只改关心的字段）=====
-WIFI_SSID="651"
-WIFI_PASSWORD="11111111"
-WIFI_ENCRYPTION="psk-mixed"
-
-mkdir -p package/base-files/files/etc/uci-defaults
-cat > package/base-files/files/etc/uci-defaults/99-custom-wifi <<'EOF'
-#!/bin/sh
-. /lib/functions.sh
-# 首次启动设置默认 WiFi，升级时不覆盖用户配置
-[ "$PKG_UPGRADE" = 1 ] && exit 0
-
-# 若尚未生成无线配置，让系统自动探测生成（wifi detect 已在 22.03+ 移除，用 wifi config）
-[ -f /etc/config/wireless ] || wifi config 2>/dev/null || wifi detect 2>/dev/null || true
-
-# 关键：ssid / encryption / key / disabled 必须设在 wifi-iface（接口）段，不是 wifi-device（设备）段
-set_wifi() {
-	uci -q set wireless."$1".ssid="$WIFI_SSID"
-	uci -q set wireless."$1".encryption="$WIFI_ENCRYPTION"
-	uci -q set wireless."$1".key="$WIFI_PASSWORD"
-	uci -q set wireless."$1".disabled='0'
-}
-config_load wireless
-config_foreach set_wifi wifi-iface
-
-# 设备段（wifi-device）属性：国家码/信道/htmode/频段/信号密度，按你给的配置写全
-set_dev() {
-	uci -q set wireless."$1".country='CN'
-	uci -q set wireless."$1".channel='auto'
-	uci -q set wireless."$1".cell_density='0'
-	local band
-	config_get band "$1" band
-	case "$band" in
-		5g) uci -q set wireless."$1".band='5g';  uci -q set wireless."$1".htmode='HE80' ;;
-		*)  uci -q set wireless."$1".band='2g';  uci -q set wireless."$1".htmode='HE40' ;;
-	esac
-}
-config_foreach set_dev wifi-device
-
-uci commit wireless
-wifi up 2>/dev/null || true
-exit 0
-EOF
-chmod +x package/base-files/files/etc/uci-defaults/99-custom-wifi
-
 # ===== 设置默认 LED 配置 =====
 mkdir -p package/base-files/files/etc/uci-defaults
 cat > package/base-files/files/etc/uci-defaults/99-custom-led <<'EOF'
@@ -87,17 +42,6 @@ uci commit system
 exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/99-custom-led
-
-# ===== 设置默认 root 登录密码 =====
-mkdir -p package/base-files/files/etc/uci-defaults
-cat > package/base-files/files/etc/uci-defaults/99-custom-rootpw <<'EOF'
-#!/bin/sh
-# 首次启动设置 root 登录密码，升级时不覆盖用户已改的密码
-[ "$PKG_UPGRADE" = 1 ] && exit 0
-echo "root:101311" | chpasswd
-exit 0
-EOF
-chmod +x package/base-files/files/etc/uci-defaults/99-custom-rootpw
 
 echo "[DIY-P2] done"
 
