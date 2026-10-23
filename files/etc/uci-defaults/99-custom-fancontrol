@@ -1,0 +1,13 @@
+#!/bin/sh
+. /lib/functions.sh
+# 首次启动启用 fancontrol（其余数值用官方默认），升级时不覆盖用户配置
+[ "$PKG_UPGRADE" = 1 ] && exit 0
+
+uci -q set fancontrol.settings.enabled='1'
+uci -q commit fancontrol
+
+# 启用风扇控制服务（开机自启），并立刻启动一次
+/etc/init.d/fancontrol enable 2>/dev/null || true
+/etc/init.d/fancontrol start 2>/dev/null || true
+
+exit 0

@@ -1,0 +1,33 @@
+#!/bin/sh
+. /lib/functions.sh
+# 首次启动设置 WiFi（只改 SSID/密码/加密/信道/htmode），其余由官方自动探测生成
+# 升级时不覆盖用户已改的配置
+[ "$PKG_UPGRADE" = 1 ] && exit 0
+
+# 若官方尚未生成无线配置，则自动探测生成（wifi detect 已在 22.03+ 移除，用 wifi config）
+[ -f /etc/config/wireless ] || wifi config 2>/dev/null || wifi detect 2>/dev/null || true
+
+# ---- 接口段：SSID / 加密 / 密码 / 启用（这些字段必须在 wifi-iface 段）----
+set_wifi() {
+	uci -q set wireless."$1".ssid='651'
+	uci -q set wireless."$1".encryption='psk-mixed'
+	uci -q set wireless."$1".key='11111111'
+	uci -q set wireless."$1".disabled='0'
+}
+config_load wireless
+config_foreach set_wifi wifi-iface
+
+# ---- 设备段：信道 / htmode（按官方探测到的频段区分，其余 path/type/band/country 由官方生成）----
+set_dev() {
+	uci -q set wireless."$1".channel='auto'
+	local band
+	config_get band "$1" band
+	case "$band" in
+		5g) uci -q set wireless."$1".htmode='HE80' ;;
+		*)  uci -q set wireless."$1".htmode='HE40' ;;
+	esac
+}
+config_foreach set_dev wifi-device
+
+uci commit wireless
+exit 0

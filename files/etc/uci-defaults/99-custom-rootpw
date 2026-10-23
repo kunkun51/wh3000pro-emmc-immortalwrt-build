@@ -1,0 +1,5 @@
+#!/bin/sh
+# 首次启动设置 root 登录密码，升级时不覆盖用户已改的密码
+[ "$PKG_UPGRADE" = 1 ] && exit 0
+echo "root:101311" | chpasswd
+exit 0
