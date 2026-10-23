@@ -1,8 +1,8 @@
 name: Build ImmortalWrt WH3000Pro EMMC
 on:
   workflow_dispatch:
-#  push:
-#   branches: [ main ]
+  push:
+   branches: [ main ]
   #schedule:
    #- cron: '0 16 * * *'   # UTC 16:00 = 北京时间每天 00:00（半夜12点）
 

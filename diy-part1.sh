@@ -3,7 +3,7 @@ echo "[DIY-P1] add feeds"
 
 
 # QModem
-sed -i '$a src-git qmodem https://github.com/kunkun51/QModem' feeds.conf.default
+sed -i '$a src-git qmodem https://github.com/kunkun51/QModem;main' feeds.conf.default
 
 #echo 'src-git qmodem https://github.com/kunkun51/QModem.git;main' >> feeds.conf.default
 # Argon主题 & 设置面板
