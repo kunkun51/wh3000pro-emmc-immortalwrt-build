@@ -1,9 +1,9 @@
-[submodule "plugin/bandix/luci-app-bandix-plus"]
-	path = plugin/bandix/luci-app-bandix-plus
-	url = https://github.com/timsaya/luci-app-bandix-plus
-[submodule "plugin/bandix/openwrt-bandix-plus"]
-	path = plugin/bandix/openwrt-bandix-plus
-	url = https://github.com/timsaya/openwrt-bandix-plus
+; [submodule "plugin/bandix/luci-app-bandix-plus"]
+; 	path = plugin/bandix/luci-app-bandix-plus
+; 	url = https://github.com/timsaya/luci-app-bandix-plus
+; [submodule "plugin/bandix/openwrt-bandix-plus"]
+; 	path = plugin/bandix/openwrt-bandix-plus
+; 	url = https://github.com/timsaya/openwrt-bandix-plus
 [submodule "plugin/fancontrol/fancontrol"]
 	path = plugin/fancontrol/fancontrol
 	url = https://github.com/JiaY-shi/fancontrol.git
