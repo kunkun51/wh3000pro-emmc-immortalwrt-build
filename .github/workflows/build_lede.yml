@@ -1,4 +1,4 @@
-name: Build ImmortalWrt WH3000Pro EMMC
+name: Build Lede WH3000Pro EMMC
 on:
   workflow_dispatch:
 #  push:
