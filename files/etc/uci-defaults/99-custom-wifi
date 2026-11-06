@@ -23,7 +23,7 @@ set_dev() {
 	local band
 	config_get band "$1" band
 	case "$band" in
-		5g) uci -q set wireless."$1".htmode='HE80' ;;
+		5g) uci -q set wireless."$1".htmode='HE160' ;;
 		*)  uci -q set wireless."$1".htmode='HE40' ;;
 	esac
 }
