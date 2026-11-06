@@ -9,7 +9,7 @@
 
 # ---- 接口段：SSID / 加密 / 密码 / 启用（这些字段必须在 wifi-iface 段）----
 set_wifi() {
-	uci -q set wireless."$1".ssid='5G-CPE'
+	uci -q set wireless."$1".ssid='DIY-CPE'
 	uci -q set wireless."$1".encryption='psk-mixed'
 	uci -q set wireless."$1".key='11111111'
 	uci -q set wireless."$1".disabled='0'

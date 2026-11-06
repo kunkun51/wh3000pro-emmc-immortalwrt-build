@@ -1,8 +1,8 @@
 #!/bin/sh
 . /lib/functions.sh
-# 首次启动设置主机名为 5G-CPE，升级时不覆盖用户已改的配置
+# 首次启动设置主机名为 DIY-CPE，升级时不覆盖用户已改的配置
 [ "$PKG_UPGRADE" = 1 ] && exit 0
 
-uci -q set system.@system[0].hostname='5G-CPE'
+uci -q set system.@system[0].hostname='DIY-CPE'
 uci -q commit system
 exit 0
