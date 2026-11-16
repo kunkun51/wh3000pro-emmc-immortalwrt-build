@@ -5,8 +5,8 @@ name: Build 237mtk WH3000Pro EMMC (Minimal)
 
 on:
   workflow_dispatch:
-#  push:
-#    branches: [ main ]
+  push:
+    branches: [ main ]
 
 env:
   # openwrt-24.10-6.6 分支 = 官方 ImmortalWrt 24.10 源码 + 内置 MTK 闭源 WiFi 驱动
@@ -48,6 +48,8 @@ jobs:
       - name: Add QModem feed
         run: |
           cd openwrt
+          # 2026-11-16 修复：kunkun51/QModem 已移除不存在的 kmod-mhi-wwan 依赖
+          # 仍保留诊断注解以监控 recursive dependency 问题
           sed -i '$a src-git qmodem https://github.com/kunkun51/QModem;main' feeds.conf.default
           cat feeds.conf.default
 
@@ -83,6 +85,16 @@ jobs:
             grep -iE "warning|error|not found|unknown" /tmp/defconfig.log | head -10 | while IFS= read -r l; do echo "::warning::defconfig: $l"; done
           else
             echo "::notice::defconfig produced no warnings"
+          fi
+
+          # 探针 A2：递归依赖的完整符号链（kconfig 会打印 select/depends 链路）
+          if grep -q "recursive dependency" /tmp/defconfig.log; then
+            grep -A12 "recursive dependency" /tmp/defconfig.log | head -60 | while IFS= read -r l; do echo "::warning::recursion: $l"; done
+            grep -oE "tmp/[/.a-z-]+\.in:[0-9]+" /tmp/defconfig.log | sed 's/.*://' | sort -un | while IFS= read -r n; do
+              start=$((n-4)); [ $start -lt 1 ] && start=1
+              echo "::warning::pkgcfg around line $n:"
+              sed -n "${start},$((n+4))p" tmp/.config-package.in | while IFS= read -r l; do echo "::warning::pkgcfg: $l"; done
+            done
           fi
 
           # 探针 B（决定性）：kconfig 片段中设备符号是否存在
@@ -141,7 +153,7 @@ jobs:
             - **源码分支**: ${{ env.REPO_BRANCH }}
             - **目标设备**: ${{ env.PROFILE }}
             - **编译时间**: ${{ steps.tag.outputs.release_date }}
-            - **说明**: 最小化 config 编译，不含自定义 files/plugin；已添加 QModem feed；内置 MTK 闭源 WiFi 驱动（mt_wifi）
+            - **说明**: 最小化 config 编译，不含自定义 files/plugin；内置 MTK 闭源 WiFi 驱动（mt_wifi）；未包含 QModem（feed 依赖问题待修复）
           files: |
             openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*
           draft: false
