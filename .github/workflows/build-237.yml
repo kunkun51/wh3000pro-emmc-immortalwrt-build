@@ -5,14 +5,16 @@ name: Build ImmortalWrt WH3000Pro EMMC (Minimal)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
+#  push:
+#    branches: [ main ]
 
 env:
   REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x-6.6
   REPO_BRANCH: mt798x-mt799x-6.6-mtwifi
   TARGET_BOARD: mediatek
   TARGET_SUBTARGET: filogic
+  # 目标设备：WH3000 Pro eMMC 版
+  # 该设备在源码分支中不存在，由 "Patch DTS" 步骤从官方 ImmortalWrt 移植 DTS + 设备定义
   PROFILE: huasifei_wh3000-pro-emmc
 
 jobs:
@@ -40,6 +42,45 @@ jobs:
       - name: Clone ImmortalWrt source
         run: |
           git clone --depth 1 -b ${{ env.REPO_BRANCH }} ${{ env.REPO_URL }} openwrt
+
+      - name: Patch DTS for WH3000 Pro eMMC
+        run: |
+          cd openwrt
+
+          # 1. 从官方 ImmortalWrt master 下载 WH3000 Pro 的 DTS（公共 dtsi + eMMC 变体）
+          curl -fsSL -o target/linux/mediatek/dts/mt7981b-huasifei-wh3000-pro.dtsi \
+            https://raw.githubusercontent.com/immortalwrt/immortalwrt/master/target/linux/mediatek/dts/mt7981b-huasifei-wh3000-pro.dtsi
+          curl -fsSL -o target/linux/mediatek/dts/mt7981b-huasifei-wh3000-pro-emmc.dts \
+            https://raw.githubusercontent.com/immortalwrt/immortalwrt/master/target/linux/mediatek/dts/mt7981b-huasifei-wh3000-pro-emmc.dts
+
+          # 2. 本分支没有 mt7981b.dtsi（MT7981B 与 MT7981 同一 die），改用 mt7981.dtsi
+          sed -i 's/#include "mt7981b.dtsi"/#include "mt7981.dtsi"/' \
+            target/linux/mediatek/dts/mt7981b-huasifei-wh3000-pro.dtsi
+
+          # 3. 向 filogic.mk 追加设备定义，使 PROFILE 在 defconfig 中生效
+          cat >> target/linux/mediatek/image/filogic.mk <<'EOF'
+
+          define Device/huasifei_wh3000-pro-emmc
+            DEVICE_VENDOR := Huasifei
+            DEVICE_MODEL := WH3000 Pro
+            DEVICE_VARIANT := eMMC
+            DEVICE_DTS := mt7981b-huasifei-wh3000-pro-emmc
+            DEVICE_DTS_DIR := ../dts
+            DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware \
+          	kmod-hwmon-pwmfan kmod-usb3 f2fsck mkf2fs automount
+            SUPPORTED_DEVICES += huasifei,wh3000-pro
+            KERNEL := kernel-bin | lzma | fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb
+            KERNEL_INITRAMFS := kernel-bin | lzma | \
+          	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 64k
+            IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+          endef
+          TARGET_DEVICES += huasifei_wh3000-pro-emmc
+          EOF
+
+          # 4. 校验
+          grep -n "mt7981.dtsi" target/linux/mediatek/dts/mt7981b-huasifei-wh3000-pro.dtsi
+          grep -c "huasifei_wh3000-pro-emmc" target/linux/mediatek/image/filogic.mk
+          echo "=== DTS patch done ==="
 
       - name: Add QModem feed
         run: |
@@ -102,7 +143,7 @@ jobs:
             - **源码分支**: ${{ env.REPO_BRANCH }}
             - **目标设备**: ${{ env.PROFILE }}
             - **编译时间**: ${{ steps.tag.outputs.release_date }}
-            - **说明**: 最小化 config 编译，不含自定义 files/plugin，已添加 QModem feed
+            - **说明**: 最小化 config 编译，不含自定义 files/plugin；已添加 QModem feed，并从官方 ImmortalWrt 移植 WH3000 Pro eMMC DTS
           files: |
             openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*
           draft: false
