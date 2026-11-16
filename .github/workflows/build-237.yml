@@ -91,16 +91,16 @@ jobs:
           if grep -q "recursive dependency" /tmp/defconfig.log; then
             grep -A12 "recursive dependency" /tmp/defconfig.log | head -60 | while IFS= read -r l; do echo "::warning::recursion: $l"; done
             python3 - <<'PYEOF'
-            import re
-            log = open('/tmp/defconfig.log', errors='replace').read()
-            nums = sorted({int(m.group(1)) for m in re.finditer(r'config-package\.in:(\d+)', log)})
-            cfg = open('tmp/.config-package.in', errors='replace').read().splitlines()
-            for n in nums:
-                lo, hi = max(1, n-6), min(len(cfg), n+6)
-                print(f"::warning::pkgcfg lines {lo}-{hi}:")
-                for i in range(lo-1, hi):
-                    print(f"::warning::pkgcfg[{i+1}] {cfg[i]}")
-            PYEOF
+          import re
+          log = open('/tmp/defconfig.log', errors='replace').read()
+          nums = sorted({int(m.group(1)) for m in re.finditer(r'config-package\.in:(\d+)', log)})
+          cfg = open('tmp/.config-package.in', errors='replace').read().splitlines()
+          for n in nums:
+              lo, hi = max(1, n-6), min(len(cfg), n+6)
+              print(f"::warning::pkgcfg lines {lo}-{hi}:")
+              for i in range(lo-1, hi):
+                  print(f"::warning::pkgcfg[{i+1}] {cfg[i]}")
+          PYEOF
           fi
 
           # 探针 B（决定性）：kconfig 片段中设备符号是否存在
