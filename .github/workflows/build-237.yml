@@ -1,10 +1,12 @@
-name: Build ImmortalWrt WH3000Pro EMMC
+name: Build ImmortalWrt WH3000Pro EMMC (Minimal)
+
+# 独立工作流：不使用仓库内的 diy-part1.sh / diy-part2.sh / .config / files / plugin
+# 一切步骤内联，最小化 config 编译
+
 on:
   workflow_dispatch:
   push:
-   branches: [ main ]
-  #schedule:
-   #- cron: '0 16 * * *'   # UTC 16:00 = 北京时间每天 00:00（半夜12点）
+    branches: [ main ]
 
 env:
   REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x-6.6
@@ -12,19 +14,20 @@ env:
   TARGET_BOARD: mediatek
   TARGET_SUBTARGET: filogic
   PROFILE: huasifei_wh3000-pro-emmc
-  CONFIG_FILE: .config
-  DIY1: diy-part1.sh
-  DIY2: diy-part2.sh
 
 jobs:
   build:
     runs-on: ubuntu-22.04
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0   # 拉取完整历史，用于生成版本间变更日志
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt clean
+          df -h
 
       - name: Install build dependencies
         run: |
@@ -37,13 +40,12 @@ jobs:
       - name: Clone ImmortalWrt source
         run: |
           git clone --depth 1 -b ${{ env.REPO_BRANCH }} ${{ env.REPO_URL }} openwrt
-          cd openwrt
 
-      - name: diy-part1 feeds
+      - name: Add QModem feed
         run: |
           cd openwrt
-          chmod +x ../${{ env.DIY1 }}
-          ../${{ env.DIY1 }}
+          sed -i '$a src-git qmodem https://github.com/kunkun51/QModem;main' feeds.conf.default
+          cat feeds.conf.default
 
       - name: Feeds update & install
         run: |
@@ -51,58 +53,35 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: diy-part2 copy plugin & modify config
+      - name: Generate minimal config
         run: |
           cd openwrt
-          chmod +x ../${{ env.DIY2 }}
-          ../${{ env.DIY2 }}
+          cat > .config <<EOF
+          CONFIG_TARGET_${{ env.TARGET_BOARD }}=y
+          CONFIG_TARGET_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}=y
+          CONFIG_TARGET_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}_DEVICE_${{ env.PROFILE }}=y
+          EOF
 
-      - name: Apply diffconfig
-        run: |
-          cd openwrt
-          cat ../.config > .config
-
-          # 临时规避已知的循环依赖
-          sed -i 's/CONFIG_PACKAGE_luci-app-weechat=y/# CONFIG_PACKAGE_luci-app-weechat is not set/' .config || true
-
-          echo "=== Running make defconfig ==="
-          if ! make defconfig; then
-            echo "::error::defconfig failed due to dependency issues"
-            grep -i "recursive dependency\|does not exist" tmp/.config-package.in || true
-            exit 1
-          fi
-
-          echo "=== Diff: initial config vs new config (full) ==="
-          diff ../.config .config || true
-
-          echo "=== Diff: lost configs (from old config only) ==="
-          diff ../.config .config | grep -e "^<" | grep -v "^< #" || true
-
-          echo "=== Diff: new configs (from new config only) ==="
-          diff ../.config .config | grep -e "^>" | grep -v "^> #" || true
+          make defconfig
 
           echo "=== Checking target device ==="
-          if ! grep -Fxq "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_huasifei_wh3000-pro-emmc=y" .config; then
-            echo "::error::Target device huasifei_wh3000-pro-emmc NOT found in final config!"
-            echo "Available huasifei devices in current config:"
+          if ! grep -Fxq "CONFIG_TARGET_DEVICE_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}_DEVICE_${{ env.PROFILE }}=y" .config; then
+            echo "::error::Target device ${{ env.PROFILE }} NOT found in final config!"
             grep "huasifei" .config || echo "(none found)"
             exit 1
           fi
-          echo "✅ Config validated successfully"
+          echo "=== Config validated ==="
+          grep -E "^CONFIG_TARGET" .config
 
       - name: Compile firmware
         run: |
           cd openwrt
-          make -j$(nproc)
-          # V=s 完整日志调试用；正式编译推荐 V=w
-          # make -j$(nproc) V=s 完整明细（调试排错用）
-          # make -j$(nproc) V=w 只输出警告+错误（平衡方案，当前推荐）
-          # make -j$(nproc)      极简概要日志（日常编译，日志最少）
+          make -j$(nproc) || make -j1 V=s
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WH3000Pro-EMMC
+          name: WH3000Pro-EMMC-Minimal
           path: openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}
 
       - name: Generate release tag
@@ -113,57 +92,17 @@ jobs:
           echo "release_tag=$(TZ=Asia/Shanghai date +'%Y.%m.%d-%H%M')" >> $GITHUB_OUTPUT
           echo "release_date=$(TZ=Asia/Shanghai date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
 
-      - name: Generate release notes
-        env:
-          TZ: Asia/Shanghai
-          BUILD_DATE: ${{ steps.tag.outputs.release_date }}
-          REPO_BRANCH: ${{ env.REPO_BRANCH }}
-          PROFILE: ${{ env.PROFILE }}
-        run: |
-          # 上一个发布的 tag（没有则取全部历史）
-          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
-          echo "上一个发布版本: ${PREV_TAG:-<无>}"
-
-          {
-            echo "## 📦 ImmortalWrt WH3000Pro EMMC 固件"
-            echo "- **源码分支**: $REPO_BRANCH"
-            echo "- **目标设备**: $PROFILE"
-            echo "- **编译时间**: $BUILD_DATE"
-            echo ""
-
-            # 手动版本说明（可选）：仓库根目录的 RELEASE_NOTES.md 会拼进发布页
-            if [ -f RELEASE_NOTES.md ]; then
-              echo "## 📝 本次修改说明"
-              cat RELEASE_NOTES.md
-              echo ""
-            fi
-
-            # 自动变更日志：上次发布以来的 commit
-            echo "## 🔄 相对上一版的变更"
-            if [ -n "$PREV_TAG" ]; then
-              RANGE="$PREV_TAG..HEAD"
-            else
-              RANGE="HEAD"
-            fi
-            COMMITS=$(git log --pretty=format:'- %s (%h, %ad)' --date=format:'%m-%d %H:%M' -30 $RANGE || true)
-            if [ -n "$COMMITS" ]; then
-              echo "$COMMITS"
-            else
-              echo "- （自上一版以来无仓库变更，为定时/重复编译）"
-            fi
-            echo ""
-            echo "> ⚠️ 本固件由 GitHub Actions 自动编译生成"
-          } > release-notes.md
-
-          cat release-notes.md
-
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
-        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
-          tag_name: ${{ steps.tag.outputs.release_tag }}
-          name: ImmortalWrt WH3000Pro EMMC ${{ steps.tag.outputs.release_date }}
-          body_path: release-notes.md
+          tag_name: minimal-${{ steps.tag.outputs.release_tag }}
+          name: ImmortalWrt WH3000Pro EMMC Minimal ${{ steps.tag.outputs.release_date }}
+          body: |
+            ## ImmortalWrt WH3000Pro EMMC (Minimal)
+            - **源码分支**: ${{ env.REPO_BRANCH }}
+            - **目标设备**: ${{ env.PROFILE }}
+            - **编译时间**: ${{ steps.tag.outputs.release_date }}
+            - **说明**: 最小化 config 编译，不含自定义 files/plugin，已添加 QModem feed
           files: |
             openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*
           draft: false
