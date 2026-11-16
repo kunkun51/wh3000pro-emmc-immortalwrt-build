@@ -94,6 +94,7 @@ jobs:
           ./scripts/feeds install -a
 
       - name: Generate minimal config
+        shell: bash
         run: |
           cd openwrt
           cat > .config <<EOF
@@ -102,19 +103,35 @@ jobs:
           CONFIG_TARGET_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}_DEVICE_${{ env.PROFILE }}=y
           EOF
 
+          # 元数据探针 1：直接询问 make，设备是否被注册（结果以注解形式可见）
+          DUMP_OUT=$(make -s -C target/linux/mediatek/image DUMP=1 SUBTARGET=filogic 2>&1) \
+            || echo "::warning::DUMP probe command itself failed"
+          if echo "$DUMP_OUT" | grep -q "Device: ${{ env.PROFILE }}"; then
+            echo "::notice::DUMP probe: device IS registered in image metadata"
+          else
+            echo "::error::DUMP probe: device NOT in image metadata - extra.mk not loaded or block invalid"
+          fi
+
+          # 元数据探针 2：检查 targetinfo 缓存文件
+          if grep -q "${{ env.PROFILE }}" tmp/.targetinfo 2>/dev/null; then
+            echo "::notice::targetinfo: device IS registered"
+          else
+            echo "::error::targetinfo: device NOT registered"
+          fi
+
           make defconfig 2>&1 | tee /tmp/defconfig.log
 
           echo "=== defconfig warnings/errors ==="
-          grep -iE "warning|error|not found|unknown" /tmp/defconfig.log || echo "(none)"
+          grep -iE "warning|error|not found|unknown" /tmp/defconfig.log | head -20 || true
 
           echo "=== huasifei entries in target metadata (tmp/.targetinfo) ==="
           grep -B1 -A15 "huasifei" tmp/.targetinfo || echo "(no huasifei in targetinfo!)"
 
           echo "=== huasifei lines in final .config ==="
           grep huasifei .config || echo "(none)"
+
           if ! grep -Fxq "CONFIG_TARGET_DEVICE_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}_DEVICE_${{ env.PROFILE }}=y" .config; then
             echo "::error::Target device ${{ env.PROFILE }} NOT found in final config!"
-            grep "huasifei" .config || echo "(none found)"
             exit 1
           fi
           echo "=== Config validated ==="
