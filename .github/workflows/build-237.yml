@@ -90,11 +90,17 @@ jobs:
           # 探针 A2：递归依赖的完整符号链（kconfig 会打印 select/depends 链路）
           if grep -q "recursive dependency" /tmp/defconfig.log; then
             grep -A12 "recursive dependency" /tmp/defconfig.log | head -60 | while IFS= read -r l; do echo "::warning::recursion: $l"; done
-            grep -oE "tmp/[/.a-z-]+\.in:[0-9]+" /tmp/defconfig.log | sed 's/.*://' | sort -un | while IFS= read -r n; do
-              start=$((n-4)); [ $start -lt 1 ] && start=1
-              echo "::warning::pkgcfg around line $n:"
-              sed -n "${start},$((n+4))p" tmp/.config-package.in | while IFS= read -r l; do echo "::warning::pkgcfg: $l"; done
-            done
+            python3 - <<'PYEOF'
+import re
+log = open('/tmp/defconfig.log', errors='replace').read()
+nums = sorted({int(m.group(1)) for m in re.finditer(r'config-package\.in:(\d+)', log)})
+cfg = open('tmp/.config-package.in', errors='replace').read().splitlines()
+for n in nums:
+    lo, hi = max(1, n-6), min(len(cfg), n+6)
+    print(f"::warning::pkgcfg lines {lo}-{hi}:")
+    for i in range(lo-1, hi):
+        print(f"::warning::pkgcfg[{i+1}] {cfg[i]}")
+PYEOF
           fi
 
           # 探针 B（决定性）：kconfig 片段中设备符号是否存在
@@ -153,7 +159,7 @@ jobs:
             - **源码分支**: ${{ env.REPO_BRANCH }}
             - **目标设备**: ${{ env.PROFILE }}
             - **编译时间**: ${{ steps.tag.outputs.release_date }}
-            - **说明**: 最小化 config 编译，不含自定义 files/plugin；内置 MTK 闭源 WiFi 驱动（mt_wifi）；未包含 QModem（feed 依赖问题待修复）
+            - **说明**: 最小化 config 编译，不含自定义 files/plugin；内置 MTK 闭源 WiFi 驱动（mt_wifi）；已包含 QModem feed
           files: |
             openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*
           draft: false
