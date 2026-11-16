@@ -9,13 +9,15 @@ on:
 #    branches: [ main ]
 
 env:
+  # openwrt-24.10-6.6 分支 = 官方 ImmortalWrt 24.10 源码 + 内置 MTK 闭源 WiFi 驱动
+  # （闭源驱动位于 package/mtk/drivers/mt_wifi + conninfra + warp）
   REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x-6.6
-  REPO_BRANCH: mt798x-mt799x-6.6-mtwifi
+  REPO_BRANCH: openwrt-24.10-6.6
   TARGET_BOARD: mediatek
   TARGET_SUBTARGET: filogic
-  # 目标设备：WH3000 Pro eMMC 版
-  # 该设备在源码分支中不存在，由 "Patch DTS" 步骤从官方 ImmortalWrt 移植 DTS + 设备定义
-  PROFILE: huasifei_wh3000-pro-emmc
+  # 该分支原生支持 huasifei_wh3000-pro（WH3000 Pro eMMC，DTS: mt7981b-huasifei-wh3000-pro）
+  # 无需任何 DTS 补丁
+  PROFILE: huasifei_wh3000-pro
 
 jobs:
   build:
@@ -43,44 +45,6 @@ jobs:
         run: |
           git clone --depth 1 -b ${{ env.REPO_BRANCH }} ${{ env.REPO_URL }} openwrt
 
-      - name: Patch DTS for WH3000 Pro eMMC
-        run: |
-          cd openwrt
-
-          # 1. 从官方 ImmortalWrt master 下载 WH3000 Pro 的 DTS（公共 dtsi + eMMC 变体）
-          curl -fsSL -o target/linux/mediatek/dts/mt7981b-huasifei-wh3000-pro.dtsi \
-            https://raw.githubusercontent.com/immortalwrt/immortalwrt/master/target/linux/mediatek/dts/mt7981b-huasifei-wh3000-pro.dtsi
-          curl -fsSL -o target/linux/mediatek/dts/mt7981b-huasifei-wh3000-pro-emmc.dts \
-            https://raw.githubusercontent.com/immortalwrt/immortalwrt/master/target/linux/mediatek/dts/mt7981b-huasifei-wh3000-pro-emmc.dts
-
-          # 2. 本分支没有 mt7981b.dtsi（MT7981B 与 MT7981 同一 die），改用 mt7981.dtsi
-          sed -i 's/#include "mt7981b.dtsi"/#include "mt7981.dtsi"/' \
-            target/linux/mediatek/dts/mt7981b-huasifei-wh3000-pro.dtsi
-
-          # 3. 写入独立的 filogic-extra.mk（image Makefile 原生支持 -include $(SUBTARGET)-extra.mk，
-          #    不动主 filogic.mk，避免追加内容破坏其解析）
-          cat > target/linux/mediatek/image/filogic-extra.mk <<'EXTRA_EOF'
-          define Device/huasifei_wh3000-pro-emmc
-            DEVICE_VENDOR := Huasifei
-            DEVICE_MODEL := WH3000 Pro
-            DEVICE_VARIANT := eMMC
-            DEVICE_DTS := mt7981b-huasifei-wh3000-pro-emmc
-            DEVICE_DTS_DIR := ../dts
-            DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware kmod-hwmon-pwmfan kmod-usb3 f2fsck mkf2fs automount
-            SUPPORTED_DEVICES += huasifei,wh3000-pro
-            KERNEL := kernel-bin | lzma | fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb
-            KERNEL_INITRAMFS := kernel-bin | lzma | fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 64k
-            IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
-          endef
-          TARGET_DEVICES += huasifei_wh3000-pro-emmc
-          EXTRA_EOF
-
-          # 4. 校验：include 已替换、extra.mk 内容正确
-          grep -n "mt7981.dtsi" target/linux/mediatek/dts/mt7981b-huasifei-wh3000-pro.dtsi
-          echo "=== filogic-extra.mk content ==="
-          cat target/linux/mediatek/image/filogic-extra.mk
-          echo "=== DTS patch done ==="
-
       - name: Add QModem feed
         run: |
           cd openwrt
@@ -101,6 +65,8 @@ jobs:
           CONFIG_TARGET_${{ env.TARGET_BOARD }}=y
           CONFIG_TARGET_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}=y
           CONFIG_TARGET_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}_DEVICE_${{ env.PROFILE }}=y
+          # MTK 闭源 WiFi 驱动（依赖 kmod-conninfra/kmod-mediatek_hnat/kmod-warp/wifi-dats 自动解析）
+          CONFIG_PACKAGE_mt_wifi=y
           EOF
 
           # 元数据探针：检查 targetinfo 缓存文件
@@ -175,7 +141,7 @@ jobs:
             - **源码分支**: ${{ env.REPO_BRANCH }}
             - **目标设备**: ${{ env.PROFILE }}
             - **编译时间**: ${{ steps.tag.outputs.release_date }}
-            - **说明**: 最小化 config 编译，不含自定义 files/plugin；已添加 QModem feed，并从官方 ImmortalWrt 移植 WH3000 Pro eMMC DTS
+            - **说明**: 最小化 config 编译，不含自定义 files/plugin；已添加 QModem feed；内置 MTK 闭源 WiFi 驱动（mt_wifi）
           files: |
             openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*
           draft: false
