@@ -103,16 +103,7 @@ jobs:
           CONFIG_TARGET_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}_DEVICE_${{ env.PROFILE }}=y
           EOF
 
-          # 元数据探针 1：直接询问 make，设备是否被注册（结果以注解形式可见）
-          DUMP_OUT=$(make -s -C target/linux/mediatek/image DUMP=1 SUBTARGET=filogic 2>&1) \
-            || echo "::warning::DUMP probe command itself failed"
-          if echo "$DUMP_OUT" | grep -q "Device: ${{ env.PROFILE }}"; then
-            echo "::notice::DUMP probe: device IS registered in image metadata"
-          else
-            echo "::error::DUMP probe: device NOT in image metadata - extra.mk not loaded or block invalid"
-          fi
-
-          # 元数据探针 2：检查 targetinfo 缓存文件
+          # 元数据探针：检查 targetinfo 缓存文件
           if grep -q "${{ env.PROFILE }}" tmp/.targetinfo 2>/dev/null; then
             echo "::notice::targetinfo: device IS registered"
           else
@@ -121,11 +112,29 @@ jobs:
 
           make defconfig 2>&1 | tee /tmp/defconfig.log
 
-          echo "=== defconfig warnings/errors ==="
-          grep -iE "warning|error|not found|unknown" /tmp/defconfig.log | head -20 || true
+          # 探针 A：defconfig 警告（kconfig 未知符号警告会出现在这里）
+          if grep -qiE "warning|error|not found|unknown" /tmp/defconfig.log; then
+            grep -iE "warning|error|not found|unknown" /tmp/defconfig.log | head -10 | while IFS= read -r l; do echo "::warning::defconfig: $l"; done
+          else
+            echo "::notice::defconfig produced no warnings"
+          fi
 
-          echo "=== huasifei entries in target metadata (tmp/.targetinfo) ==="
-          grep -B1 -A15 "huasifei" tmp/.targetinfo || echo "(no huasifei in targetinfo!)"
+          # 探针 B（决定性）：kconfig 片段中设备符号是否存在
+          if grep -q "DEVICE_${{ env.PROFILE }}" tmp/.config-target.in 2>/dev/null; then
+            echo "::notice::kconfig: device symbol EXISTS in tmp/.config-target.in"
+          else
+            echo "::error::kconfig: device symbol MISSING from tmp/.config-target.in (gen_target_config skipped it)"
+          fi
+
+          # 探针 C：对照组（分支自带的连字符设备名）
+          if grep -q "DEVICE_glinet_gl-mt3000" tmp/.config-target.in 2>/dev/null; then
+            echo "::notice::kconfig control: glinet_gl-mt3000 symbol EXISTS"
+          else
+            echo "::warning::kconfig control: glinet_gl-mt3000 symbol MISSING"
+          fi
+
+          # 探针 D：目标设备的 targetinfo 块内容（检查 image_build/default 等标志）
+          grep -B2 -A20 "huasifei" tmp/.targetinfo | head -40 || true
 
           echo "=== huasifei lines in final .config ==="
           grep huasifei .config || echo "(none)"
