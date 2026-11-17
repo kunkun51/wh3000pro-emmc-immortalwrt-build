@@ -1,7 +1,7 @@
 name: Build 237mtk WH3000Pro EMMC 
 
-# 独立工作流：不使用仓库内的 diy-part1.sh / diy-part2.sh / files / plugin
-# 配置来源为仓库 devconfig/237.config（目标行由 env 覆盖），其余步骤内联
+# 独立工作流：复用仓库 diy-part1.sh / diy-part2.sh（含 files / plugin）
+# 配置来源为仓库 devconfig/237.config（目标行由 env 覆盖）
 
 on:
   workflow_dispatch:
@@ -18,6 +18,8 @@ env:
   # 该分支原生支持 huasifei_wh3000-pro（WH3000 Pro eMMC，DTS: mt7981b-huasifei-wh3000-pro）
   # 无需任何 DTS 补丁
   PROFILE: huasifei_wh3000-pro
+  DIY1: diy-part1.sh
+  DIY2: diy-part2.sh
 
 jobs:
   build:
@@ -26,6 +28,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Free up disk space
         run: |
@@ -49,12 +53,11 @@ jobs:
           sed -i 's/u64_stats_fetch_begin_irq/u64_stats_fetch_begin/g; s/u64_stats_fetch_retry_irq/u64_stats_fetch_retry/g' \
             package/mtk/applications/5g-modem/fibocom_QMI_WWAN/src/qmi_wwan_f.c
 
-      - name: Add QModem feed
+      - name: diy-part1 feeds
         run: |
           cd openwrt
-          # 2026-11-16 修复：kunkun51/QModem 已移除不存在的 kmod-mhi-wwan 依赖
-          # 仍保留诊断注解以监控 recursive dependency 问题
-          sed -i '$a src-git qmodem https://github.com/kunkun51/QModem;main' feeds.conf.default
+          chmod +x ../${{ env.DIY1 }}
+          ../${{ env.DIY1 }}
           cat feeds.conf.default
 
       - name: Feeds update & install
@@ -63,15 +66,11 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Copy files & plugin
+      - name: diy-part2 copy plugin & modify config
         run: |
           cd openwrt
-          # 仓库 plugin/ 放入 package/plugin，供 defconfig 识别其中的包
-          rm -rf package/plugin files
-          cp -r ../plugin package/
-          # 仓库 files/ 覆盖进固件根文件系统（含 uci-defaults 首次启动脚本）
-          cp -r ../files .
-          chmod +x files/etc/uci-defaults/* 2>/dev/null || true
+          chmod +x ../${{ env.DIY2 }}
+          ../${{ env.DIY2 }}
           ls -l files/etc/uci-defaults/
           ls -l package/plugin/
 
