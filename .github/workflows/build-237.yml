@@ -52,6 +52,8 @@ jobs:
           # 兼容 6.6.133：u64_stats API 的 _irq 变体已被上游删除，fibocom qmi_wwan_f 仍在使用
           sed -i 's/u64_stats_fetch_begin_irq/u64_stats_fetch_begin/g; s/u64_stats_fetch_retry_irq/u64_stats_fetch_retry/g' \
             package/mtk/applications/5g-modem/fibocom_QMI_WWAN/src/qmi_wwan_f.c
+          sed -i 's/192.168.6.1/192.168.1.1/g' package/base-files/files/bin/config_generate
+          grep -q '192\.168\.1\.1' package/base-files/files/bin/config_generate || { echo "::error::LAN IP patch failed"; exit 1; }
 
       - name: diy-part1 feeds
         run: |
