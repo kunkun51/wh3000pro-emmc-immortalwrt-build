@@ -1,0 +1,8 @@
+#!/bin/sh
+# 默认主题设为 aurora（仅当镜像里确实包含 aurora 静态资源时才生效）
+[ "$PKG_UPGRADE" = 1 ] && exit 0
+[ -d /www/luci-static/aurora ] || exit 0
+
+uci -q set luci.main.mediaurlbase='/luci-static/aurora'
+uci -q commit luci
+exit 0
