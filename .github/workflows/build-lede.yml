@@ -60,7 +60,7 @@ jobs:
       - name: Apply diffconfig
         run: |
           cd openwrt
-          cat ../.config > .config
+          cat ../devconfig/lede.config > .config
 
           # 临时规避已知的循环依赖
           sed -i 's/CONFIG_PACKAGE_luci-app-weechat=y/# CONFIG_PACKAGE_luci-app-weechat is not set/' .config || true
