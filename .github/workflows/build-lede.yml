@@ -12,7 +12,7 @@ env:
   TARGET_BOARD: mediatek
   TARGET_SUBTARGET: filogic
   PROFILE: huasifei_wh3000-pro-emmc
-  CONFIG_FILE: .config
+  CONFIG_FILE: devconfig/lede.config
   DIY1: diy-part1.sh
   DIY2: diy-part2.sh
 
@@ -60,7 +60,7 @@ jobs:
       - name: Apply diffconfig
         run: |
           cd openwrt
-          cat ../devconfig/lede.config > .config
+          cat ../${{ env.CONFIG_FILE }} > .config
 
           # 临时规避已知的循环依赖
           sed -i 's/CONFIG_PACKAGE_luci-app-weechat=y/# CONFIG_PACKAGE_luci-app-weechat is not set/' .config || true
@@ -73,13 +73,13 @@ jobs:
           fi
 
           echo "=== Diff: initial config vs new config (full) ==="
-          diff ../.config .config || true
+          diff ../${{ env.CONFIG_FILE }} .config || true
 
           echo "=== Diff: lost configs (from old config only) ==="
-          diff ../.config .config | grep -e "^<" | grep -v "^< #" || true
+          diff ../${{ env.CONFIG_FILE }} .config | grep -e "^<" | grep -v "^< #" || true
 
           echo "=== Diff: new configs (from new config only) ==="
-          diff ../.config .config | grep -e "^>" | grep -v "^> #" || true
+          diff ../${{ env.CONFIG_FILE }} .config | grep -e "^>" | grep -v "^> #" || true
 
           echo "=== Checking target device ==="
           if ! grep -Fxq "CONFIG_TARGET_DEVICE_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}_DEVICE_${{ env.PROFILE }}=y" .config; then
