@@ -78,6 +78,22 @@ jobs:
           mkdir -p package/mtk/drivers/conninfra/src
           tar -xJf ../driver-upgrade/mt79xx_conninfra_20231229-f2fa25.tar.xz -C package/mtk/drivers/conninfra/src --strip-components=1
 
+          # 6.6 内核不再提供 struct timeval，升级包的 osal.h 缺少定义，补回 fork 原版的写法
+          python3 - <<'PY'
+          p = 'package/mtk/drivers/conninfra/src/base/include/osal.h'
+          s = open(p).read()
+          if 'struct timeval {' not in s:
+              block = ('typedef long __kernel_time_t;\n\n'
+                       'struct timeval {\n'
+                       '\t__kernel_time_t\t\ttv_sec;\t\t/* seconds */\n'
+                       '\t__kernel_suseconds_t\ttv_usec;\t/* microseconds */\n'
+                       '};\n\n')
+              needle = 'int osal_gettimeofday2(struct timeval *tv);'
+              s = s.replace(needle, block + needle, 1)
+              open(p, 'w').write(s)
+              print('patched struct timeval into conninfra osal.h')
+          PY
+
           echo "=== datconf 757f9679 ==="
           mkdir -p dl
           cp ../driver-upgrade/datconf-757f9679.tar.bz2 dl/
