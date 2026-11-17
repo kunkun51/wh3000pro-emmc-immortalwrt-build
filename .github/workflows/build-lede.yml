@@ -11,7 +11,7 @@ env:
   REPO_BRANCH: master
   TARGET_BOARD: mediatek
   TARGET_SUBTARGET: filogic
-  PROFILE: huasifei_wh3000-pro-emmc
+  PROFILE: huasifei_wh3000-pro
   CONFIG_FILE: .config
   DIY1: diy-part1.sh
   DIY2: diy-part2.sh
