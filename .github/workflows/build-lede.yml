@@ -26,6 +26,12 @@ jobs:
           submodules: recursive
           fetch-depth: 0   # 拉取完整历史，用于生成版本间变更日志
 
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android
+          sudo apt clean
+          df -h
+
       - name: Install build dependencies
         run: |
           sudo apt update
@@ -90,14 +96,26 @@ jobs:
           fi
           echo "✅ Config validated successfully"
 
+      - name: Download sources
+        run: |
+          cd openwrt
+          make download -j8
+          find dl -size -1024c -exec ls -l {} \; 2>/dev/null || true
+
       - name: Compile firmware
         run: |
           cd openwrt
-          make -j$(nproc)
-          # V=s 完整日志调试用；正式编译推荐 V=w
-          # make -j$(nproc) V=s 完整明细（调试排错用）
-          # make -j$(nproc) V=w 只输出警告+错误（平衡方案，当前推荐）
-          # make -j$(nproc)      极简概要日志（日常编译，日志最少）
+          echo "=== 开始编译，CPU 核心数: $(nproc) ==="
+          set +e
+          make -j$(nproc) V=s 2>&1 | tee /tmp/build.log | grep -E "^make\[|ERROR:|error:"
+          rc=${PIPESTATUS[0]}
+          set -e
+          if [ $rc -ne 0 ]; then
+            echo "::warning::并行编译失败 (exit=$rc)，改用单线程重试以获取完整错误"
+            make -j1 V=s 2>&1 | tail -150
+            exit 1
+          fi
+          echo "✅ 编译完成"
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
