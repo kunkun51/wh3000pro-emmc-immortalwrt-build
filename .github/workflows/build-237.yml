@@ -63,6 +63,18 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+      - name: Copy files & plugin
+        run: |
+          cd openwrt
+          # 仓库 plugin/ 放入 package/plugin，供 defconfig 识别其中的包
+          rm -rf package/plugin files
+          cp -r ../plugin package/
+          # 仓库 files/ 覆盖进固件根文件系统（含 uci-defaults 首次启动脚本）
+          cp -r ../files .
+          chmod +x files/etc/uci-defaults/* 2>/dev/null || true
+          ls -l files/etc/uci-defaults/
+          ls -l package/plugin/
+
       - name: Import config from devconfig/237.config
         shell: bash
         run: |
