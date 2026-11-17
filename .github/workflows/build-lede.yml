@@ -162,7 +162,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           tag_name: ${{ steps.tag.outputs.release_tag }}
-          name: ImmortalWrt WH3000Pro EMMC ${{ steps.tag.outputs.release_date }}
+          name: LEDE-WH3000Pro-EMMC ${{ steps.tag.outputs.release_date }}
           body_path: release-notes.md
           files: |
             openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*

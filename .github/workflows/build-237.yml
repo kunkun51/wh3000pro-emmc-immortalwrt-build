@@ -164,10 +164,10 @@ jobs:
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: minimal-${{ steps.tag.outputs.release_tag }}
-          name: ImmortalWrt WH3000Pro EMMC Minimal ${{ steps.tag.outputs.release_date }}
+          tag_name: 237-${{ steps.tag.outputs.release_tag }}
+          name: 237-WH3000Pro-EMMC  ${{ steps.tag.outputs.release_date }}
           body: |
-            ## ImmortalWrt WH3000Pro EMMC (Minimal)
+            ## 237 WH3000Pro-EMMC 
             - **源码分支**: ${{ env.REPO_BRANCH }}
             - **目标设备**: ${{ env.PROFILE }}
             - **编译时间**: ${{ steps.tag.outputs.release_date }}
