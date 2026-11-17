@@ -82,8 +82,8 @@ jobs:
           diff ../.config .config | grep -e "^>" | grep -v "^> #" || true
 
           echo "=== Checking target device ==="
-          if ! grep -Fxq "CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_huasifei_wh3000-pro-emmc=y" .config; then
-            echo "::error::Target device huasifei_wh3000-pro-emmc NOT found in final config!"
+          if ! grep -Fxq "CONFIG_TARGET_DEVICE_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}_DEVICE_${{ env.PROFILE }}=y" .config; then
+            echo "::error::Target device ${{ env.PROFILE }} NOT found in final config!"
             echo "Available huasifei devices in current config:"
             grep "huasifei" .config || echo "(none found)"
             exit 1
