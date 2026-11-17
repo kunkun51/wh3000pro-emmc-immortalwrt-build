@@ -1,7 +1,7 @@
 name: Build 237mtk WH3000Pro EMMC (Minimal)
 
-# 独立工作流：不使用仓库内的 diy-part1.sh / diy-part2.sh / .config / files / plugin
-# 一切步骤内联，最小化 config 编译
+# 独立工作流：不使用仓库内的 diy-part1.sh / diy-part2.sh / files / plugin
+# 配置来源为仓库 devconfig/.config（目标行由 env 覆盖），其余步骤内联
 
 on:
   workflow_dispatch:
@@ -59,16 +59,19 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Generate minimal config
+      - name: Import config from devconfig/.config
         shell: bash
         run: |
           cd openwrt
-          cat > .config <<EOF
+          cp ../devconfig/.config .config
+
+          # devconfig 中的历史目标行（mediatek_mt7981 / huasifei_wh3000-pro-emmc）在本分支不存在，
+          # 统一按工作流 env 覆盖目标，其余包/驱动选项全部沿用 devconfig
+          sed -i '/^CONFIG_TARGET_mediatek/d; /^CONFIG_TARGET_DEVICE_/d' .config
+          cat >> .config <<EOF
           CONFIG_TARGET_${{ env.TARGET_BOARD }}=y
           CONFIG_TARGET_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}=y
-          CONFIG_TARGET_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}_DEVICE_${{ env.PROFILE }}=y
-          # MTK 闭源 WiFi 驱动（依赖 kmod-conninfra/kmod-mediatek_hnat/kmod-warp/wifi-dats 自动解析）
-          CONFIG_PACKAGE_mt_wifi=y
+          CONFIG_TARGET_DEVICE_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}_DEVICE_${{ env.PROFILE }}=y
           EOF
 
           # 元数据探针：检查 targetinfo 缓存文件
@@ -90,18 +93,11 @@ jobs:
           # 探针 A2：递归依赖的完整符号链（kconfig 会打印 select/depends 链路）
           if grep -q "recursive dependency" /tmp/defconfig.log; then
             grep -A12 "recursive dependency" /tmp/defconfig.log | head -60 | while IFS= read -r l; do echo "::warning::recursion: $l"; done
-            python3 - <<'PYEOF'
-          import re
-          log = open('/tmp/defconfig.log', errors='replace').read()
-          nums = sorted({int(m.group(1)) for m in re.finditer(r'config-package\.in:(\d+)', log)})
-          cfg = open('tmp/.config-package.in', errors='replace').read().splitlines()
-          for n in nums:
-              lo, hi = max(1, n-6), min(len(cfg), n+6)
-              print(f"::warning::pkgcfg lines {lo}-{hi}:")
-              for i in range(lo-1, hi):
-                  print(f"::warning::pkgcfg[{i+1}] {cfg[i]}")
-          PYEOF
+            python3 -c "import re; log=open('/tmp/defconfig.log',errors='replace').read(); nums=sorted({int(m.group(1)) for m in re.finditer(r'config-package\.in:(\d+)', log)}); cfg=open('tmp/.config-package.in',errors='replace').read().splitlines(); [print('::warning::pkgcfg[' + str(i+1) + '] ' + cfg[i]) for n in nums for i in range(max(1,n-6)-1, min(len(cfg), n+6))]"
           fi
+
+          # 探针 A3：ndisc6/rdisc6 在包元数据中的全部引用（含行号）
+          grep -n -iE "ndisc6|rdisc6" tmp/.config-package.in | head -20 | while IFS= read -r l; do echo "::warning::ndisc-ref: $l"; done
 
           # 探针 B（决定性）：kconfig 片段中设备符号是否存在
           if grep -q "DEVICE_${{ env.PROFILE }}" tmp/.config-target.in 2>/dev/null; then
@@ -159,7 +155,7 @@ jobs:
             - **源码分支**: ${{ env.REPO_BRANCH }}
             - **目标设备**: ${{ env.PROFILE }}
             - **编译时间**: ${{ steps.tag.outputs.release_date }}
-            - **说明**: 最小化 config 编译，不含自定义 files/plugin；内置 MTK 闭源 WiFi 驱动（mt_wifi）；已包含 QModem feed
+            - **说明**: 配置来自 devconfig/.config，不含自定义 files/plugin；内置 MTK 闭源 WiFi 驱动（mt_wifi）；已包含 QModem feed
           files: |
             openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*
           draft: false
