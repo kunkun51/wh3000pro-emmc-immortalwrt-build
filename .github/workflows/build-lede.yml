@@ -88,7 +88,7 @@ jobs:
           diff ../${{ env.CONFIG_FILE }} .config | grep -e "^>" | grep -v "^> #" || true
 
           echo "=== Checking target device ==="
-          if ! grep -Fxq "CONFIG_TARGET_DEVICE_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}_DEVICE_${{ env.PROFILE }}=y" .config; then
+          if ! grep -Fxq "CONFIG_TARGET_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}_DEVICE_${{ env.PROFILE }}=y" .config; then
             echo "::error::Target device ${{ env.PROFILE }} NOT found in final config!"
             echo "Available huasifei devices in current config:"
             grep "huasifei" .config || echo "(none found)"
