@@ -170,7 +170,7 @@ jobs:
             - **源码分支**: ${{ env.REPO_BRANCH }}
             - **目标设备**: ${{ env.PROFILE }}
             - **编译时间**: ${{ steps.tag.outputs.release_date }}
-            - **说明**: 配置来自 devconfig/237.config，不含自定义 files/plugin；内置 MTK 闭源 WiFi 驱动（mt_wifi）；已包含 QModem feed
+            - **说明**: 配置来自 devconfig/237.config，含自定义 files/plugin；内置 MTK 闭源 WiFi 驱动（mt_wifi）；已包含 QModem feed
           files: |
             openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*
           draft: false
