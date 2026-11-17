@@ -55,6 +55,41 @@ jobs:
           sed -i 's/192.168.6.1/192.168.1.1/g' package/base-files/files/bin/config_generate
           grep -q '192\.168\.1\.1' package/base-files/files/bin/config_generate || { echo "::error::LAN IP patch failed"; exit 1; }
 
+      - name: Apply MT7981 WiFi driver 7.6.7.3 upgrade package
+        shell: bash
+        run: |
+          set -e
+          cd openwrt
+
+          echo "=== mt_wifi 7.6.7.3 source + firmware ==="
+          rm -rf package/mtk/drivers/mt_wifi/src
+          mkdir -p package/mtk/drivers/mt_wifi/src
+          tar -xJf ../driver-upgrade/mt79xx_20250408-705eb4.tar.xz -C package/mtk/drivers/mt_wifi/src
+          cp package/mtk/drivers/mt_wifi/src/bin/mt7981/rebb/*.bin \
+             package/mtk/drivers/mt_wifi/files/mt7981-fw-20240613/
+
+          echo "=== warp 20250408 ==="
+          rm -rf package/mtk/drivers/warp/src
+          mkdir -p package/mtk/drivers/warp/src
+          tar -xJf ../driver-upgrade/warp_20250408-5f71ec.tar.xz -C package/mtk/drivers/warp/src --strip-components=1
+
+          echo "=== conninfra 20231229 ==="
+          rm -rf package/mtk/drivers/conninfra/src
+          mkdir -p package/mtk/drivers/conninfra/src
+          tar -xJf ../driver-upgrade/mt79xx_conninfra_20231229-f2fa25.tar.xz -C package/mtk/drivers/conninfra/src --strip-components=1
+
+          echo "=== datconf 757f9679 ==="
+          mkdir -p dl
+          cp ../driver-upgrade/datconf-757f9679.tar.bz2 dl/
+          sed -i 's/^PKG_REVISION:=.*/PKG_REVISION:=757f9679/' package/mtk/applications/datconf/Makefile
+
+          echo "=== version strings & obsolete patch hook ==="
+          sed -i 's|^PKG_VERSION:=.*|PKG_VERSION:=7.6.7.3-$(PKG_SUFFIX)|' package/mtk/drivers/mt_wifi/Makefile
+          sed -i 's|^PKG_VERSION:=.*|PKG_VERSION:=20250408-5f71ec|' package/mtk/drivers/warp/Makefile
+          sed -i 's|^PKG_VERSION:=.*|PKG_VERSION:=f2fa25|' package/mtk/drivers/conninfra/Makefile
+          sed -i 's|^Hooks/Prepare/Post := FIXUP_NEW_MCU_FW_API|#Hooks/Prepare/Post := FIXUP_NEW_MCU_FW_API|' package/mtk/drivers/mt_wifi/Makefile
+          grep -H '^PKG_VERSION' package/mtk/drivers/mt_wifi/Makefile package/mtk/drivers/warp/Makefile package/mtk/drivers/conninfra/Makefile
+
       - name: diy-part1 feeds
         run: |
           cd openwrt
