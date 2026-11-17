@@ -1,12 +1,12 @@
-name: Build 237mtk WH3000Pro EMMC (Minimal)
+name: Build 237mtk WH3000Pro EMMC 
 
 # 独立工作流：不使用仓库内的 diy-part1.sh / diy-part2.sh / files / plugin
-# 配置来源为仓库 devconfig/.config（目标行由 env 覆盖），其余步骤内联
+# 配置来源为仓库 devconfig/237.config（目标行由 env 覆盖），其余步骤内联
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
+#  push:
+#    branches: [ main ]
 
 env:
   # openwrt-24.10-6.6 分支 = 官方 ImmortalWrt 24.10 源码 + 内置 MTK 闭源 WiFi 驱动
@@ -44,6 +44,10 @@ jobs:
       - name: Clone ImmortalWrt source
         run: |
           git clone --depth 1 -b ${{ env.REPO_BRANCH }} ${{ env.REPO_URL }} openwrt
+          cd openwrt
+          # 兼容 6.6.133：u64_stats API 的 _irq 变体已被上游删除，fibocom qmi_wwan_f 仍在使用
+          sed -i 's/u64_stats_fetch_begin_irq/u64_stats_fetch_begin/g; s/u64_stats_fetch_retry_irq/u64_stats_fetch_retry/g' \
+            package/mtk/applications/5g-modem/fibocom_QMI_WWAN/src/qmi_wwan_f.c
 
       - name: Add QModem feed
         run: |
@@ -59,11 +63,11 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Import config from devconfig/.config
+      - name: Import config from devconfig/237.config
         shell: bash
         run: |
           cd openwrt
-          cp ../devconfig/.config .config
+          cp ../devconfig/237.config .config
 
           # devconfig 中的历史目标行（mediatek_mt7981 / huasifei_wh3000-pro-emmc）在本分支不存在，
           # 统一按工作流 env 覆盖目标，其余包/驱动选项全部沿用 devconfig
@@ -155,7 +159,7 @@ jobs:
             - **源码分支**: ${{ env.REPO_BRANCH }}
             - **目标设备**: ${{ env.PROFILE }}
             - **编译时间**: ${{ steps.tag.outputs.release_date }}
-            - **说明**: 配置来自 devconfig/.config，不含自定义 files/plugin；内置 MTK 闭源 WiFi 驱动（mt_wifi）；已包含 QModem feed
+            - **说明**: 配置来自 devconfig/237.config，不含自定义 files/plugin；内置 MTK 闭源 WiFi 驱动（mt_wifi）；已包含 QModem feed
           files: |
             openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*
           draft: false
