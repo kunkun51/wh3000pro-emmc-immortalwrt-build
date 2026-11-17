@@ -7,12 +7,27 @@
 # 若官方尚未生成无线配置，则自动探测生成（wifi detect 已在 22.03+ 移除，用 wifi config）
 [ -f /etc/config/wireless ] || wifi config 2>/dev/null || wifi detect 2>/dev/null || true
 
-# ---- 接口段：SSID / 加密 / 密码 / 启用（这些字段必须在 wifi-iface 段）----
+# ---- 接口段：按所属设备的频段分别设置 SSID / 加密 / 密码 / 启用 ----
 set_wifi() {
-	uci -q set wireless."$1".ssid='DIY-CPE'
-	uci -q set wireless."$1".encryption='psk-mixed'
-	uci -q set wireless."$1".key='11111111'
-	uci -q set wireless."$1".disabled='0'
+	local iface="$1" dev band hwmode ssid
+	config_get dev "$iface" device
+	config_get band "$dev" band
+	# 部分驱动不写 band，则按 hwmode 判断频段
+	if [ -z "$band" ]; then
+		config_get hwmode "$dev" hwmode
+		case "$hwmode" in
+			11a|11ac|11ax|11be) band='5g' ;;
+			*) band='2g' ;;
+		esac
+	fi
+	case "$band" in
+		5g*) ssid='DIY-CPE-5G' ;;
+		*)   ssid='DIY-CPE-2.4G' ;;
+	esac
+	uci -q set wireless."$iface".ssid="$ssid"
+	uci -q set wireless."$iface".encryption='psk-mixed'
+	uci -q set wireless."$iface".key='11111111'
+	uci -q set wireless."$iface".disabled='0'
 }
 config_load wireless
 config_foreach set_wifi wifi-iface
@@ -23,7 +38,7 @@ set_dev() {
 	local band
 	config_get band "$1" band
 	case "$band" in
-		5g) uci -q set wireless."$1".htmode='HE160' ;;
+		5g) uci -q set wireless."$1".htmode='HE80' ;;
 		*)  uci -q set wireless."$1".htmode='HE40' ;;
 	esac
 }

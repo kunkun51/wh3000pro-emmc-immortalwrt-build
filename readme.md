@@ -1,7 +1,21 @@
-# 华思飞wh3000pro emmc 版本actions编译
+# 华思飞 WH3000Pro eMMC · GitHub Actions 编译
 
-## immortalwrt官方分支 
+## 固件默认信息
 
-### 管理地址 192.168.1.1 无密码 
+| 项目 | 值 |
+| --- | --- |
+| 管理地址 | `192.168.1.1`（无密码） |
+| WiFi 名称 | `DIY-CPE-2.4G` / `DIY-CPE-5G` |
+| WiFi 密码 | `11111111`（8 个 1） |
 
-### wifi名称 DIY-CPE 密码：8个1
+## 工作流说明
+
+| 工作流文件 | 源码分支 | 说明 |
+| --- | --- | --- |
+| `build.yml` | ImmortalWrt 官方分支 | 适合尝鲜，WiFi 驱动跟随官方 |
+| `build-237.yml` | padavanonly 237 分支 | 使用 237 大佬仓库，MTK 闭源 WiFi 驱动 |
+| `build-lede.yml` | coolsnowwolf/lede 分支 | LEDE 仓库编译 |
+
+## 其他
+
+- **QModem**：使用 fork 仓库，已修改部分问题
