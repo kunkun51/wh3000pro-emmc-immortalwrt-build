@@ -84,6 +84,12 @@ jobs:
           done
           grep -rn 'class_create' package/mtk/drivers/conninfra/src || true
 
+          # 6.6 内核已移除 ioremap_nocache()（5.11 起改名），升级包仍在用
+          grep -rl 'ioremap_nocache' package/mtk/drivers/conninfra/src | while read -r f; do
+            sed -i 's/ioremap_nocache(/ioremap(/g' "$f"
+          done
+          grep -rn 'ioremap_nocache' package/mtk/drivers/conninfra/src || echo "ioremap_nocache: none left"
+
           # 6.6 内核不再提供 struct timeval，升级包的 osal.h 缺少定义，补回 fork 原版的写法
           python3 - <<'PY'
           p = 'package/mtk/drivers/conninfra/src/base/include/osal.h'
