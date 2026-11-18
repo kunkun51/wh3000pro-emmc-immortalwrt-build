@@ -72,6 +72,8 @@ jobs:
           rm -rf package/mtk/drivers/warp/src
           mkdir -p package/mtk/drivers/warp/src
           tar -xJf ../driver-upgrade/warp_20250408-5f71ec.tar.xz -C package/mtk/drivers/warp/src --strip-components=1
+          # 6.6 内核已移除 MODULE_SUPPORTED_DEVICE，升级包仍在用
+          sed -i '/MODULE_SUPPORTED_DEVICE/d' package/mtk/drivers/warp/src/warp_main.c
 
           echo "=== conninfra 20231229 ==="
           rm -rf package/mtk/drivers/conninfra/src
