@@ -78,6 +78,12 @@ jobs:
           mkdir -p package/mtk/drivers/conninfra/src
           tar -xJf ../driver-upgrade/mt79xx_conninfra_20231229-f2fa25.tar.xz -C package/mtk/drivers/conninfra/src --strip-components=1
 
+          # 6.4+ 内核的 class_create() 已移除 owner 参数，升级包仍是旧写法，统一改为单参数
+          grep -rl 'class_create(THIS_MODULE' package/mtk/drivers/conninfra/src | while read -r f; do
+            sed -i 's/class_create(THIS_MODULE,[[:space:]]*/class_create(/' "$f"
+          done
+          grep -rn 'class_create' package/mtk/drivers/conninfra/src || true
+
           # 6.6 内核不再提供 struct timeval，升级包的 osal.h 缺少定义，补回 fork 原版的写法
           python3 - <<'PY'
           p = 'package/mtk/drivers/conninfra/src/base/include/osal.h'
