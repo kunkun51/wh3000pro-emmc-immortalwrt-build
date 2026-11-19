@@ -1,0 +1,159 @@
+name: Build 2512 WH3000Pro EMMC
+
+# 独立工作流：ImmortalWrt 25.12（chasey-dev/immortalwrt-mt798x-rebase，kernel 6.12）
+# 复用仓库 diy-part1.sh（QModem feed）/ diy-part2.sh（files / plugin）
+# 配置来源为仓库 devconfig/2512.config
+
+on:
+  workflow_dispatch:
+
+env:
+  REPO_URL: https://github.com/chasey-dev/immortalwrt-mt798x-rebase
+  REPO_BRANCH: 25.12
+  TARGET_BOARD: mediatek
+  TARGET_SUBTARGET: filogic
+  PROFILE: huasifei_wh3000-pro-emmc
+  CONFIG_FILE: devconfig/2512.config
+  DIY1: diy-part1.sh
+  DIY2: diy-part2.sh
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt clean
+          df -h
+
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+          bzip2 ccache cmake cpio curl device-tree-compiler flex gawk gcc-multilib g++-multilib gettext \
+          git gzip libncurses-dev libssl-dev libxml2 libxslt-dev make nano pkgconf python3 python3-pip \
+          python3-setuptools rsync sed swig tar unzip wget zlib1g-dev
+
+      - name: Clone ImmortalWrt 25.12 source
+        run: |
+          git clone --depth 1 -b ${{ env.REPO_BRANCH }} ${{ env.REPO_URL }} openwrt
+          cd openwrt
+          echo "=== kernel version ==="
+          grep KERNEL_PATCHVER target/linux/mediatek/Makefile
+          echo "=== warp patches ==="
+          ls -1 package/mtk/drivers/warp/patches/
+          for p in \
+            005-since-v5.17-fix-procfs-api-and-macro-incompatible.patch \
+            008-since-v6.11-fix-platform_driver-expect-void-remove-callback.patch \
+            009-since-v6.10-fix-missing-explicitly-include-vmalloc-header.patch; do
+            [ -f "package/mtk/drivers/warp/patches/$p" ] || { echo "::error::warp patch missing: $p"; exit 1; }
+          done
+          echo "=== warp patches verified ==="
+
+      - name: diy-part1 feeds
+        run: |
+          cd openwrt
+          chmod +x ../${{ env.DIY1 }}
+          ../${{ env.DIY1 }}
+          grep -q 'QModem' feeds.conf.default || { echo "::error::QModem feed not added"; exit 1; }
+          cat feeds.conf.default
+
+      - name: Feeds update & install
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: diy-part2 copy plugin & modify config
+        run: |
+          cd openwrt
+          chmod +x ../${{ env.DIY2 }}
+          ../${{ env.DIY2 }}
+          ls -l files/etc/uci-defaults/
+          ls -l package/plugin/
+
+      - name: Import config from devconfig/2512.config
+        shell: bash
+        run: |
+          cd openwrt
+          cp ../${{ env.CONFIG_FILE }} .config
+
+          make defconfig 2>&1 | tee /tmp/defconfig.log
+
+          # defconfig 警告/错误
+          if grep -qiE "warning:|error:" /tmp/defconfig.log; then
+            grep -iE "warning:|error:" /tmp/defconfig.log | head -20 | while IFS= read -r l; do
+              echo "::warning::defconfig: $l"
+            done
+          else
+            echo "::notice::defconfig produced no warnings"
+          fi
+
+          # 关键符号断言：目标设备 / MTK WiFi / warp / QModem
+          check() {
+            grep -Fxq "$1" .config || { echo "::error::missing in .config: $1"; exit 1; }
+          }
+          check "CONFIG_TARGET_mediatek=y"
+          check "CONFIG_TARGET_mediatek_filogic=y"
+          check "CONFIG_TARGET_DEVICE_${{ env.TARGET_BOARD }}_${{ env.TARGET_SUBTARGET }}_DEVICE_${{ env.PROFILE }}=y"
+          check "CONFIG_PACKAGE_kmod-mt_wifi=y"
+          check "CONFIG_PACKAGE_kmod-warp=y"
+          check "CONFIG_PACKAGE_kmod-mediatek_hnat=y"
+          check "CONFIG_PACKAGE_kmod-conninfra=y"
+          check "CONFIG_MTK_CHIP_MT7981=y"
+          check "CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y"
+          check "CONFIG_MTK_WHNAT_SUPPORT=m"
+          check "CONFIG_MTK_WARP_V2=y"
+          check 'CONFIG_WARP_CHIPSET="mt7981"'
+          check "CONFIG_WARP_VERSION=2"
+          check "CONFIG_PACKAGE_qmodem=y"
+          check "CONFIG_PACKAGE_luci-app-qmodem-next=y"
+
+          echo "=== key config lines ==="
+          grep -nE "^CONFIG_(TARGET_(mediatek|DEVICE)|PACKAGE_(kmod-(mt_wifi|warp|mediatek_hnat|conninfra)|qmodem|luci-app-qmodem-next)|MTK_(CHIP_MT7981|MT_WIFI|WHNAT_SUPPORT|WARP_V2)|WARP_)" .config || true
+          echo "=== Config validated ==="
+
+      - name: Compile firmware
+        run: |
+          cd openwrt
+          make -j$(nproc) || make -j1 V=s
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WH3000Pro-EMMC-2512
+          path: openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}
+
+      - name: Generate release tag
+        id: tag
+        env:
+          TZ: Asia/Shanghai
+        run: |
+          echo "release_tag=$(TZ=Asia/Shanghai date +'%Y.%m.%d-%H%M')" >> $GITHUB_OUTPUT
+          echo "release_date=$(TZ=Asia/Shanghai date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: 2512-${{ steps.tag.outputs.release_tag }}
+          name: 2512-WH3000Pro-EMMC  ${{ steps.tag.outputs.release_date }}
+          body: |
+            ## 2512 WH3000Pro-EMMC
+            - **源码分支**: ${{ env.REPO_BRANCH }}（kernel 6.12）
+            - **目标设备**: ${{ env.PROFILE }}
+            - **编译时间**: ${{ steps.tag.outputs.release_date }}
+            - **说明**: 配置来自 devconfig/2512.config，含自定义 files/plugin 与 QModem feed；
+              MTK 闭源 WiFi 驱动 kmod-mt_wifi 7.6.7.3 + warp 20250408（补丁随源码树自动应用）
+          files: |
+            openwrt/bin/targets/${{ env.TARGET_BOARD }}/${{ env.TARGET_SUBTARGET }}/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
