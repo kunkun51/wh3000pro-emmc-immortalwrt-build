@@ -11,7 +11,8 @@ on:
 env:
   # openwrt-24.10-6.6 分支 = 官方 ImmortalWrt 24.10 源码 + 内置 MTK 闭源 WiFi 驱动
   # （闭源驱动位于 package/mtk/drivers/mt_wifi + conninfra + warp）
-  REPO_URL: https://github.com/kunkun51/immortalwrt-mt798x-6.6
+  #REPO_URL: https://github.com/kunkun51/immortalwrt-mt798x-6.6
+  REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x-6.6
   REPO_BRANCH: openwrt-24.10-6.6
   TARGET_BOARD: mediatek
   TARGET_SUBTARGET: filogic
