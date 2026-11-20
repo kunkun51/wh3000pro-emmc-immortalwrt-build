@@ -1,7 +1,7 @@
 # WH3000 Pro —— 237 编译固件 WiFi 驱动分析
 
-- 采集时间：2026-11-17 14:0x（设备本地时间）
-- 采集方式：SSH（`root@192.168.6.1`，237 固件默认 LAN 已变为 192.168.6.1）
+- 采集时间：2026-11-17 14:0x（初版）；2026-11-19 10:24 CST（复测）
+- 采集方式：SSH（`root@192.168.1.1`，设备实际 LAN 地址；初版误记为 192.168.6.1）
 - 设备：Huasifei WH3000 Pro（`/tmp/sysinfo/board_name` = `huasifei,wh3000-pro`）
 - 对应工作流：[build-237.yml](.github/workflows/build-237.yml)（padavanonly/immortalwrt-mt798x-6.6，openwrt-24.10-6.6）
 
@@ -15,7 +15,7 @@
 | 驱动模块 | `mt_wifi.ko` 7,192,576 字节（加载名 `mt_wifi`） |
 | WiFi 芯片 | MT7981 + MT7976（`14C3:7981`，A-die CHIP ID `0x7976`，HW Version `0x8b00`） |
 | DBDC | `one_adie_dbdc = 1`（单 A-die 双频双并发） |
-| 无线状态 | 驱动已加载、接口已创建，但无线未配置（镜像缺 `wifi-scripts`，`/sbin/wifi` 不存在） |
+| 无线状态 | 驱动已加载，无线已正常启用（`wifi-scripts` 已补齐；`ra0` / `rax0` 分别为 DIY-CPE-2.4G / DIY-CPE-5G） |
 
 ## 2. 系统信息
 
@@ -118,55 +118,55 @@ mt7981_init()-->
 
 说明：`INDEX0_debug_level`、`INDEX1..9` 的 not found 是单 profile 配置下的正常提示；`mt7981_init()` 结束表示 MTK 驱动初始化完成。
 
-## 5. 关键发现：无线未启用，根因是缺 `wifi-scripts` 包
+## 5. 无线启用情况（2026-11-19 复测：已正常）
 
-说明：WiFi 驱动本身编译、加载都正常（见第 3、4 节），问题出在「无线配置生成」这条链路断在了 `/sbin/wifi`。
+说明：初版（2026-11-17 14:0x）的结论是"无线未启用，根因是镜像缺 `wifi-scripts`"。该问题已在当天下午修复：提交 `79d8bca`（237固件编译缺失了wifi）与 `e84fe6b`（237固件编译缺失了wifi和配置）为 [devconfig/237.config](devconfig/237.config) 增加了 `CONFIG_PACKAGE_wifi-scripts=y`。2026-11-19 10:24 CST 通过 SSH 复测，无线已正常工作。
 
-证据（设备实测）：
+### 5.1 复测结果
 
 | 检查项 | 结果 |
 | --- | --- |
-| `opkg list-installed \| grep wifi-scripts` | 无（`wifi-scripts` 未安装） |
+| `opkg list-installed \| grep wifi-scripts` | `wifi-scripts - 1.0-r1`（已安装） |
+| `ls -l /sbin/wifi` | 存在，5454 字节，可执行 |
+| `/etc/config/wireless` | 存在（1035 字节）；`/rom/etc/config/wireless` 不存在，说明由 `/sbin/wifi config` 启动时生成 |
+| `uci show wireless` | `default_MT7981_1_1.ssid='DIY-CPE-2.4G'`、`default_MT7981_1_2.ssid='DIY-CPE-5G'`，均为 `disabled='0'` |
+| `ubus call network.wireless status` | `MT7981_1_1`：`up=true`、`autostart=true`、`pending=false` |
+| `iwinfo` | `ra0`：DIY-CPE-2.4G，ch3，HE40，25 dBm；`rax0`：DIY-CPE-5G，ch48，HE160，24 dBm |
+| `logread \| grep -i ucode` | 无 hostapd ucode 加载报错（初版的 `Unable to resolve path for module 'common'` 未再出现） |
+
+SSID/加密/信道由 [files/etc/uci-defaults/99-custom-wifi](files/etc/uci-defaults/99-custom-wifi) 在首次启动时设置：`DIY-CPE-2.4G`（HE40）/ `DIY-CPE-5G`（HE160）、`psk-mixed`、信道 `auto`；其余 `path/type/band/country` 由 `wifi-scripts` 探测生成。
+
+### 5.2 初版根因（已修复，保留备查）
+
+驱动本身编译、加载正常，问题出在「无线配置生成」这条链路断在 `/sbin/wifi`。当时证据：
+
+| 检查项 | 初版结果（2026-11-17） |
+| --- | --- |
+| `opkg list-installed \| grep wifi-scripts` | 无 |
 | `which wifi` / `ls /sbin/wifi` | 不存在 |
 | `/etc/init.d/boot` 第 56 行 | `/sbin/wifi config`（启动时生成无线配置） |
 | 手动执行 `/sbin/wifi config` | `ash: /sbin/wifi: not found` |
-| `/etc/config/` 与 `/rom/etc/config/` | 都没有 `wireless`（镜像里本来就不带，靠启动时生成） |
+| `/etc/config/` 与 `/rom/etc/config/` | 都没有 `wireless` |
 | `uci show wireless` / `ubus call network.wireless status` | 空 / `{}` |
 | `/lib/netifd/wireless/` | 只有 `mtwifi.sh`（驱动适配脚本，正常） |
-| `/etc/hotplug.d/net/10-mtwifi-detect` | 检测到 `ra*` 接口后会调用 `/sbin/wifi config`、`/sbin/wifi up`（同样会失败） |
 
 链路关系：
 
 ```
-/etc/init.d/boot → /sbin/wifi config          ← /sbin/wifi 由 wifi-scripts 提供（缺失）
+/etc/init.d/boot → /sbin/wifi config          ← /sbin/wifi 由 wifi-scripts 提供（当时缺失）
 /etc/hotplug.d/net/10-mtwifi-detect → /sbin/wifi config / up   ← 同上
-/lib/wifi/mtwifi.sh (来自 mtwifi-cfg) → detect_mtwifi() 生成默认配置
-   默认 SSID：ImmortalWrt-2.4G / ImmortalWrt-5G 等
+/lib/wifi/mtwifi.sh (来自 mtwifi-cfg) → 依赖 wifi-scripts 生成 /etc/config/wireless
 ```
 
-在本分支（padavanonly/immortalwrt-mt798x-6.6）里：
+在本分支（padavanonly/immortalwrt-mt798x-6.6）里，`include/target.mk` 的 `DEFAULT_PACKAGES` 不含 `wifi-scripts`，`target/linux/mediatek/filogic/target.mk` 也没有补，`mtwifi-cfg` 的依赖（`libc, iwinfo, wifi-dats, lua-cjson, datconf-lua`）同样不会带入，因此 config 未显式打开时镜像就没有 `/sbin/wifi`。
 
-- `include/target.mk` 的 `DEFAULT_PACKAGES` 不含 `wifi-scripts`
-- `target/linux/mediatek/filogic/target.mk` 只额外加了 `fitblk kmod-phy-aquantia kmod-crypto-hw-safexcel wpad-openssl uboot-envtools`
-- `mtwifi-cfg` 的依赖是 `libc, iwinfo, wifi-dats, lua-cjson, datconf-lua`，也不会带入 `wifi-scripts`
-
-所以只要 config 里没显式打开 `CONFIG_PACKAGE_wifi-scripts`，镜像就没有 `/sbin/wifi`，`/etc/config/wireless` 永远不会被生成——与仓库 `files/`（自定义 SSID/密码等）无关，`files/` 只是覆盖默认配置，不是这份最小构建的必需项。
-
-次要问题：`logread` 中 hostapd 报
-
-```
-daemon.err hostapd: Error loading ucode: ... Unable to resolve path for module 'common'
-```
-
-因为镜像里 `/usr/share/ucode/` 只有 `fw4.uc` 和 `luci`，没有 hostapd 的 ucode 脚本目录。补上 `wifi-scripts`（依赖 `ucode + ucode-mod-nl80211 + ucode-mod-rtnl + ucode-mod-ubus + ucode-mod-uci`）后此问题通常一并消失。
-
-修复方式：在 [devconfig/237.config](devconfig/237.config) 里加一行
+修复方式即上述两个提交，在 `devconfig/237.config` 中增加：
 
 ```
 CONFIG_PACKAGE_wifi-scripts=y
 ```
 
-重新编译后首次启动，`/etc/init.d/boot` 会自动生成 `/etc/config/wireless`，默认开出 `ImmortalWrt-2.4G` / `ImmortalWrt-5G`；如需自定义 SSID/密码，再用 `files/etc/config/wireless` 覆盖或刷机后修改。
+复测表明修复已生效：`/sbin/wifi` 存在，`/etc/config/wireless` 在启动时正常生成，2.4G/5G 均已起 VAP。
 
 ## 6. 与之前 QWRT 固件的对比
 
@@ -177,10 +177,10 @@ CONFIG_PACKAGE_wifi-scripts=y
 | 驱动版本 | **7.6.6.1**（`kmod-mt_wifi ...7.6.6.1-mt7981-r1`） | **7.6.7.0** |
 | 主模块 | `mt_wifi.ko`（7.19 MB） | `mt798x.ko`（9.02 MB，合并版） |
 | 加速模块包 | `kmod-warp 6.6.133.20221209` | `kmod-warp-mt7981 6.6.129-3` |
-| 无线默认配置 | 无（缺 `wifi-scripts`，`/sbin/wifi` 不存在，无法生成） | 有（QWRT-2.4G / QWRT-5G） |
-| 无线接口 | ra0/rai0/ra1/rai1/rax0/raxx0（未起 VAP） | ra0 / rax0（2.4G ch1、5G ch36） |
+| 无线默认配置 | 有（`wifi-scripts` 已安装，2.4G/5G 分别生成 DIY-CPE-2.4G / DIY-CPE-5G） | 有（QWRT-2.4G / QWRT-5G） |
+| 无线接口 | ra0（ch3，HE40）/ rax0（ch48，HE160），均已起 VAP | ra0 / rax0（2.4G ch1、5G ch36） |
 
-结论：237 构建的驱动版本比 QWRT 低一个小版本（7.6.6.1 vs 7.6.7.0），与仓库内 `mt798x-7.6.6.1-src.tar.xz` 一致；驱动、固件、校准文件、加速模块均齐全且初始化正常，唯一缺失的是 `wifi-scripts` 包（导致无线配置无法生成）。
+结论：237 构建的驱动版本比 QWRT 低一个小版本（7.6.6.1 vs 7.6.7.0），与仓库内 `mt798x-7.6.6.1-src.tar.xz` 一致；驱动、固件、校准文件、加速模块均齐全且初始化正常。`wifi-scripts` 缺失问题已于 2026-11-17 修复，2026-11-19 复测确认 2.4G/5G 无线均已正常启用。
 
 ## 7. 复现采集命令
 

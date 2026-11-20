@@ -13,8 +13,9 @@
 | 工作流文件 | 源码分支 | 说明 |
 | --- | --- | --- |
 | `build.yml` | ImmortalWrt 官方分支 | 适合尝鲜，WiFi 驱动跟随官方 |
-| `build-237.yml` | padavanonly 237 分支 | 使用 237 大佬仓库，MTK 闭源 WiFi 驱动 |
-| `build-lede.yml` | coolsnowwolf/lede 分支 | LEDE 仓库编译 |
+| `build-237.yml` | padavanonly 237 分支 | 使用 237 大佬仓库，MTK 闭源 WiFi 驱动7.6.6.1 |
+| `build-lede.yml` | coolsnowwolf/lede 分支 | LEDE 仓库编译，放弃了，没有闭源驱动 |
+| `build-2512.yml` | ImmortalWrt 25.12 内核6.12.116 官方分支 | mtk闭源驱动7673 |
 
 ## 其他
 
